@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>File Directory Search</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        #file-list {
+            margin-top: 20px;
+        }
+        .file-item {
+            margin-bottom: 10px;
+        }
+        #item-count {
+            margin-top: 20px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <h1>File Directory Search</h1>
+    <input type="file" id="directory-input" webkitdirectory directory multiple>
+    <input type="text" id="exclude-input" placeholder="Exclude directories (comma separated)" value="$,System,anime,老片" oninput="searchFiles()">
+    <input type="text" id="search-input" placeholder="Search..." oninput="searchFiles()">
+    <button onclick="generateSnapshot()">Generate Snapshot</button>
+    <div id="item-count"></div>
+    <div id="file-list"></div>
+
+    <script>
+        let fileList = [];
+
+        document.getElementById('directory-input').addEventListener('change', function(event) {
+            fileList = [];
+            const files = event.target.files;
+            for (let i = 0; i < files.length; i++) {
+                const file = files[i];
+                const path = file.webkitRelativePath || file.mozFullPath || file.name;
+                const parentDir = path.split('/').slice(0, -1).join('/');
+                fileList.push({ name: file.name, parentDir: parentDir });
+            }
+            displayFiles(fileList);
+        });
+
+        function displayFiles(files) {
+            const excludeDirsV = document.getElementById('exclude-input').value.trim();
+            const excludeDirs = excludeDirsV.length > 0 ? excludeDirsV.split(',').map(dir => dir.trim()) : [];
+            const fileListDiv = document.getElementById('file-list');
+            fileListDiv.innerHTML = '';
+            files.forEach(file => {
+                if (excludeDirs.some(dir => file.parentDir.includes(dir))) {
+                    return;
+                }
+                if (file.parentDir.lastIndexOf('\/') == -1) {
+                    return;
+                }
+                const div = document.createElement('div');
+                div.className = 'file-item';
+                div.textContent = `${file.parentDir.split(/[/\\]/).pop()}, ${file.name.split('.').slice(0, -1).join('.')}`;
+                fileListDiv.appendChild(div);
+            });
+            updateItemCount(document.getElementsByClassName('file-item').length);
+        }
+
+        function updateItemCount(count) {
+            const itemCountDiv = document.getElementById('item-count');
+            itemCountDiv.textContent = `Total items: ${count}`;
+        }
+
+        function searchFiles() {
+            const query = document.getElementById('search-input').value.toLowerCase();
+            const filteredFiles = fileList.filter(file =>
+                file.name.toLowerCase().includes(query) || file.parentDir.toLowerCase().includes(query)
+            );
+            displayFiles(filteredFiles);
+        }
+
+        function generateSnapshot() {
+            let snapshotText = '';
+            items = document.getElementsByClassName('file-item')
+            for (let i = 0; i < items.length; ++i)
+            snapshotText += items[i].innerHTML + '\n'
+            // fileList.forEach(file => {
+            //     snapshotText += `${file.parentDir}, ${file.name}\n`;
+            // });
+
+            // Create a Blob with the snapshot text
+            const blob = new Blob([snapshotText], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+
+            // Create a download link
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'snapshot.txt';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+        }
+    </script>
+</body>
+</html>
