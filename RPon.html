@@ -24,7 +24,7 @@
 <body>
     <h1>File Directory Search</h1>
     <input type="file" id="directory-input" webkitdirectory directory multiple>
-    <input type="text" id="exclude-input" placeholder="Exclude directories (comma separated)" value="$,System,anime,老片" oninput="searchFiles()">
+    <input type="text" id="exclude-input" placeholder="Exclude directories (comma separated)" value="$,System,anime,老片,.git" oninput="searchFiles()">
     <input type="text" id="search-input" placeholder="Search..." oninput="searchFiles()">
     <button onclick="generateSnapshot()">Generate Snapshot</button>
     <div id="item-count"></div>
@@ -36,14 +36,54 @@
         document.getElementById('directory-input').addEventListener('change', function(event) {
             fileList = [];
             const files = event.target.files;
+            // 1. 读取snapshot.txt
+            for (let i = 0; i < files.length; i++) {
+                const file = files[i];
+                if (file.name === "snapshot.txt") {
+                    // 解析snapshot.txt文件
+                    const reader = new FileReader();
+                    reader.onload = function(e) {
+                        const content = e.target.result;
+                        const snapshotFiles = content.split('\n').map(line => {
+                            const [name, parentDir] = line.split(',').map(part => part.trim());
+                            return { name, parentDir };
+                        }).filter(file => file.name); // 过滤掉空行
+
+                        snapshotFiles.forEach(file => {
+                            fileList.push(file);
+                        });
+                        appendCurrentDir(files);
+                    };
+                    reader.readAsText(file);
+                    return; // 跳出循环，等待snapshot.txt解析完成
+                }
+            }
+            // 未找到snapshot.txt
+            appendCurrentDir(files)
+        });
+
+        function appendCurrentDir(files) {
+            // 2. 遍历去重
             for (let i = 0; i < files.length; i++) {
                 const file = files[i];
                 const path = file.webkitRelativePath || file.mozFullPath || file.name;
                 const parentDir = path.split('/').slice(0, -1).join('/');
-                fileList.push({ name: file.name, parentDir: parentDir });
+                const fileInfo = { name: file.name, parentDir: parentDir };
+
+                // https://developer.mozilla.org/zh-CN/docs/Web/JavaScript/Reference/Global_Objects/Array/some
+                const exists = fileList.some(existingFile =>
+                    // todo: 放宽比较条件，比如去除后缀，不区分大小写
+                    existingFile.name === fileInfo.name
+                );
+                if (exists) {
+                    console.log("WARN: repeat file name", fileInfo)
+                    continue;
+                }
+                fileList.push(fileInfo)
             }
+            console.log(fileList)
             displayFiles(fileList);
-        });
+        }
 
         function displayFiles(files) {
             const excludeDirsV = document.getElementById('exclude-input').value.trim();
@@ -80,12 +120,17 @@
 
         function generateSnapshot() {
             let snapshotText = '';
-            items = document.getElementsByClassName('file-item')
-            for (let i = 0; i < items.length; ++i)
-            snapshotText += items[i].innerHTML + '\n'
-            // fileList.forEach(file => {
-            //     snapshotText += `${file.parentDir}, ${file.name}\n`;
-            // });
+            const excludeDirsV = document.getElementById('exclude-input').value.trim();
+            const excludeDirs = excludeDirsV.length > 0 ? excludeDirsV.split(',').map(dir => dir.trim()) : [];
+            fileList.forEach(file => {
+                if (excludeDirs.some(dir => file.parentDir.includes(dir))) {
+                    return;
+                }
+                if (file.parentDir.lastIndexOf('\/') == -1) {
+                    return;
+                }
+                snapshotText += `${file.name}, ${file.parentDir}` + '\n';
+            });
 
             // Create a Blob with the snapshot text
             const blob = new Blob([snapshotText], { type: 'text/plain' });
